@@ -1,0 +1,69 @@
+name: Build and Test Go Application
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Go environment
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      # 3. Cache dependencies
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # 4. Run GolangCI-Lint FIRST for fast feedback
+      - name: Run GolangCI-Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 3m
+
+      # 5. Download dependencies
+      - name: Download dependencies
+        run: go mod download
+
+      # 6. Format and vet code
+      - name: Format and Vet
+        run: |
+          go fmt ./...
+          go vet ./...
+
+      # 7. Run tests with coverage
+      - name: Run tests with coverage
+        run: |
+          go test ./... -v -coverprofile=coverage.out
+          go tool cover -func=coverage.out
+
+      # 8. Build binary
+      - name: Build binary
+        run: go build -v -o ./bin/app ./cmd/
+
+      # 9. Upload binary + coverage artifacts
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            ./bin/app
+            ./coverage.out
